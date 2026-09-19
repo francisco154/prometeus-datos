@@ -1,0 +1,43 @@
+name: EPG Prometeus
+
+# Genera epg.json (guía externa para la app Android TV) cada 6 horas.
+# Fuentes: epgshare01.online (XMLTV gz) + mi.tv (async HTML).
+# La app lo consume desde jsDelivr/raw.githubusercontent de ESTE repo.
+
+on:
+  schedule:
+    - cron: "13 */6 * * *"   # cada 6 h (minuto 13 para no chocar con la hora puntal)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: epg-generar
+  cancel-in-progress: false
+
+jobs:
+  epg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generar epg.json
+        run: python3 epg/generar_epg.py
+
+      - name: Publicar (commit si cambió)
+        run: |
+          git config user.name "prometeus-epg-bot"
+          git config user.email "epg-bot@prometeus.local"
+          if git diff --quiet epg.json; then
+            echo "Sin cambios — no se commitea"
+          else
+            git add epg.json
+            git commit -m "EPG actualizado $(date -u +%F_%H:%M) UTC"
+            git push
+          fi
